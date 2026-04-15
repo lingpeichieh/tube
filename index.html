@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>護理技術學習卡 - 完整導入版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background-color: #FFFFFF; color: #1F1F1F; overflow-x: hidden; touch-action: manipulation; }
+        .card-container { perspective: 1000px; width: 100%; max-width: 450px; height: 320px; position: relative; }
+        .card-inner {
+            position: relative; width: 100%; height: 100%; text-align: center;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d; cursor: pointer;
+        }
+        .card-inner.is-flipped { transform: rotateY(180deg); }
+        .card-face {
+            position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 2rem; border-radius: 1.5rem; border: 1px solid #E5E7EB;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04);
+        }
+        .card-front { background-color: #F9FAFB; }
+        .card-back { background-color: #F0F7FF; transform: rotateY(180deg); color: #1A56DB; }
+        
+        .feedback-overlay {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 8rem; font-weight: bold; z-index: 50; pointer-events: none;
+            opacity: 0; transform: scale(0.5);
+        }
+        .animate-feedback { animation: feedbackPop 0.5s ease-out forwards; }
+        @keyframes feedbackPop {
+            0% { opacity: 0; transform: scale(0.4); }
+            30% { opacity: 0.9; transform: scale(1.1); }
+            100% { opacity: 0; transform: scale(1.3); }
+        }
+
+        .badge {
+            position: absolute; top: 1rem; right: 1rem; width: 28px; height: 28px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: bold; opacity: 0; transition: all 0.3s;
+        }
+        .badge.show { opacity: 1; }
+        .badge-correct { background-color: #DCFCE7; color: #16A34A; }
+        .badge-wrong { background-color: #FEE2E2; color: #DC2626; }
+        .badge-skipped { background-color: #F3F4F6; color: #6B7280; }
+
+        .btn-circle {
+            width: 64px; height: 64px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; transition: all 0.2s;
+            border: 1px solid #E5E7EB; background: white;
+        }
+        .btn-circle:active { transform: scale(0.9); background: #F3F4F6; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between py-10 px-6">
+
+    <div class="w-full max-w-[450px] space-y-4">
+        <div class="flex justify-between items-end">
+            <div>
+                <span id="current-mode" class="text-[10px] font-black text-blue-500 uppercase tracking-widest block mb-1">精進模式</span>
+                <span class="text-2xl font-bold tracking-tighter" id="counter">1 / --</span>
+            </div>
+            <div class="flex gap-1.5">
+                <div class="text-center px-2">
+                    <p class="text-[9px] font-bold text-gray-400 uppercase">學會</p>
+                    <p id="learned-stat" class="font-bold text-green-600">0</p>
+                </div>
+                <div class="text-center px-2 border-l">
+                    <p class="text-[9px] font-bold text-gray-400 uppercase">不熟</p>
+                    <p id="wrong-stat" class="font-bold text-red-600">0</p>
+                </div>
+                <div class="text-center px-2 border-l">
+                    <p class="text-[9px] font-bold text-gray-400 uppercase">跳過</p>
+                    <p id="skip-stat" class="font-bold text-gray-500">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div id="progress-fill" class="h-full bg-black transition-all duration-500" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div class="card-container">
+        <div id="feedback" class="feedback-overlay"></div>
+        <div id="card" class="card-inner">
+            <div class="card-face card-front">
+                <div id="badge-front" class="badge"></div>
+                <span class="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-6">護理問題</span>
+                <p id="question" class="text-lg font-medium leading-relaxed text-gray-800 px-4"></p>
+            </div>
+            <div class="card-face card-back">
+                <span class="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-6">正確答案</span>
+                <p id="answer" class="text-xl font-bold px-4"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full max-w-[450px] flex flex-col items-center gap-8">
+        <div class="flex items-center gap-6">
+            <button id="mark-wrong" class="btn-circle shadow-sm">
+                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <button id="mark-skip" class="flex flex-col items-center group">
+                <div class="w-12 h-12 rounded-full border border-gray-200 flex items-center justify-center bg-gray-50 group-active:scale-95 transition-all">
+                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                </div>
+                <span class="text-[9px] font-black text-gray-400 mt-2 tracking-tighter">SKIP</span>
+            </button>
+
+            <button id="mark-correct" class="btn-circle shadow-sm">
+                <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+            </button>
+        </div>
+        
+        <div class="flex gap-10 items-center text-[10px] font-black text-gray-300 uppercase tracking-widest">
+            <button id="prev" class="hover:text-black">PREV</button>
+            <button id="restart" class="hover:text-red-500 border-x px-6">RESET</button>
+            <button id="next" class="hover:text-black">NEXT</button>
+        </div>
+    </div>
+
+    <script>
+        const allData = [
+            ["氣管切開手術（Tracheotomy）通常是在哪一個解剖構造下方進行切口？", "環狀軟骨"],
+            ["執行氣管切開時，外科手術切口通常位於第幾氣管環之間？", "第二至第三個氣管環"],
+            ["在氣管切口中置入氣管套管以維持呼吸道通暢的狀態稱為什麼？", "氣管造口（Tracheostomy）"],
+            ["氣管造口術的主要目的之一是建立哪一種阻塞的替代通道？", "上呼吸道阻塞"],
+            ["氣管造口術可以透過減少哪一種死腔來改善通氣效率？", "解剖性死腔"],
+            ["氣管造口術在預防呼吸道併發症方面具有什麼樣的目的？", "預防發生吸入性問題"],
+            ["氣管造口術有助於促進哪一個部位內分泌物的排除？", "氣管支氣管內"],
+            ["當內科療法無法治療腫瘤、異物或水腫引起的問題時，是氣管造口術的哪種適應症？", "上呼吸道阻塞"],
+            ["意識不清、呼吸肌麻痺或咳嗽反射受損的病人，因無力清除哪種分泌物而需要氣管造口？", "下呼吸道分泌物"],
+            ["病人若需要長時間使用哪種醫療設備輔助呼吸，通常建議執行氣管造口術？", "呼吸器"],
+            ["若因口或臉部嚴重傷害而無法執行氣管插管，臨床上會採取何種處置？", "氣管造口術"],
+            ["會厭發炎是哪一種醫療行為可能產生的合併症，進而成為氣管造口的適應症？", "氣管插管"],
+            ["單管氣管套管通常用於暫時性的造口，使用時間不應超過多久？", "一星期"],
+            ["有內管的雙管套管中，「內管」應每隔多久清洗一次以維持通暢？", "8 小時"],
+            ["當病人使用呼吸器或上呼吸道出血時，應選用哪種形式的氣管套管？", "有氣囊（Cuffed）的氣管套管"],
+            ["會厭功能正常但需長時間使用套管的患者，適合選用哪種套管？", "無氣囊（Uncuffed）氣管套管"],
+            ["病人情況穩定可自口鼻換氣時，可將哪種套管的氣囊放氣以利呼吸？", "有孔氣管套管（Fenestrated tube）"],
+            ["下列何者屬於氣管造口術後的「早期」併發症？（請舉出三項）", "出血、皮下氣腫、傷口感染"],
+            ["氣管造口手術後的造口周圍清潔，通常使用何種液體擦拭？", "生理食鹽水"],
+            ["氣管造口處通常使用哪種特殊形狀的紗布進行覆蓋？", "Y 型紗布"],
+            ["原則上，「氣管外管」應多久更換一次？", "一個月"],
+            ["更換氣管內管時，應以哪種旋轉方向開關，直到標點對齊以固定？", "順時鐘方向"],
+            ["氣管造口出血時，除了加壓止血，醫囑可能會使用哪種藥物紗布進行處理？", "epinephrine (Bosmin) 紗布"],
+            ["氣管外管上的氣囊充氣時，建議壓力應維持在多少範圍內？", "20 到 25 cmH2O"],
+            ["目前臨床多採用哪種性質的氣囊，以減少對氣管黏膜的傷害？", "高容量低壓力氣囊"],
+            ["氣囊充氣壓過大會導致氣管黏膜因受壓而產生什麼後果？", "缺血、損傷及壞死"],
+            ["氣囊壓力不足導致氣道封閉性下降，最可能引起哪一種嚴重的呼吸道併發症？", "吸入性肺炎"],
+            ["對氣切套管進行抽痰時，抽痰管建議置入的深度為多少？", "10 到 12 公分"],
+            ["抽痰時若發現抽痰管不易置入，應懷疑氣切套管發生了什麼問題？", "氣切套管阻塞"],
+            ["氣切造口繫帶（固定帶）固定後，應預留多少空間最為適當？", "一到二指寬的空隙"],
+            ["拔除氣管套管後，造口處應如何處理以促進癒合？", "蓋上紗布並以膠布固定，不需縫合即可自然癒合"],
+            ["若氣切套管滑脫「一半」，正確的緊急處理方式為何？", "立即將氣切套管推回"],
+            ["氣切套管「整個滑脫」時，協助病人平躺後應採取什麼姿勢來打開氣道？", "抬高下巴（可去枕或在脖子下方加墊毛巾）"],
+            ["若重複多次仍無法將脫落的氣切套管插入，應置入無菌抽痰管多少深度以維持通氣？", "8 公分"],
+            ["氣切管脫落緊急情況下，應立即使用哪種器械撐開氣管切口以利呼吸？", "止血鉗"],
+            ["處理氣切傷口大量出血時，護理人員應優先準備哪種包組以利醫師緊急處理？", "縫合包"],
+            ["發生皮下氣腫時，護理人員應先使用什麼工具標示範圍、日期與時間？", "藍色馬克筆"],
+            ["若皮下氣腫嚴重導致病人出現哪種呼吸徵象，應立即通知醫師處理？", "呼吸型態改變（如速率增加或過度換氣）"],
+            ["若氣切管固定後隨呼吸上下移動，代表繫帶太鬆，應如何處置？", "應再綁緊"],
+            ["氣切管若因肉芽組織增生導致無法置入，第一時間應優先給予什麼？", "給予氧氣"],
+            ["測量鼻胃管（NG tube）置入長度時，路徑為鼻尖經耳垂至何處？", "胸骨劍突處"],
+            ["插入鼻胃管時，應請患者配合做什麼動作以協助管路進入食道而非氣管？", "吞嚥或吞口水"],
+            ["鼻胃管插入的路徑依序為：鼻腔 → 咽喉 → 食道 → 進入胃。", "食道"],
+            ["為了避免躁動患者自行拔除鼻胃管，可以考慮使用哪種保護性防護工具？", "乒乓球手套"],
+            ["置入導尿管（Foley）時，為了避免結晶造成水球阻塞，禁止注入何種液體？", "生理食鹽水"],
+            ["當發現導尿管沒有尿液流出時，除了檢查管路是否折到，還應優先檢查病人哪個部位？", "檢查膀胱是否脹大"],
+            ["留置導尿管病人，若無禁忌症，建議每日水分攝取量應達到多少？", "2000cc 以上"],
+            ["導尿管尿袋中的尿量若超過多少比例時，應予以排空？", "1/2 到 1/3"],
+            ["女性留置導尿管病人，每日應執行幾次會陰沖洗（PP care）？", "兩次"],
+            ["原則上，留置導尿管應多久更換一次？", "每週一次"],
+            ["氣管套管的材質通常包含哪些種類？（舉出兩項）", "塑膠、鐵氟龍、矽膠或金屬"],
+            ["氣切管早期併發症中，「皮下氣腫」常見的發生原因為何？", "氣切管置入位置異常"],
+            ["若氣囊注氣口的何種構造鬆弛，會導致氣囊漏氣？", "活塞調節閥（Regulation Valve）"],
+            ["鼻胃管置入前，應先協助病人採取的正確體位為何？", "半坐臥位"],
+            ["導尿管護理中，尿道口發紅、疼痛、分泌物及沉澱物增加是何種徵象？", "感染徵象"],
+            ["氣管造口術後早期併發症：出血、皮下氣腫、傷口感染、氣切套管阻塞、_____。", "意外脫落"],
+            ["氣切內管應每 _____ 小時清潔一次，以保持清潔通暢。", "8"],
+            ["氣囊壓力應維持在 _____ 到 _____ cmH2O 之間。", "20 到 25"],
+            ["氣切套管抽痰時，抽痰管置入 _____ 公分。", "10 到 12"],
+            ["導尿管應 _____ 更換一次。", "每週"],
+            ["名詞：氣管切開術", "定義：以外科手術方式於環狀軟骨下方氣管環處做一切口"],
+            ["名詞：PP care", "定義：會陰沖洗。範例：留置導尿管女性病患每日執行兩次以維持清潔"],
+            ["名詞：皮下氣腫", "定義：氣體滲入皮下組織。徵象：局部腫脹、壓迫時有捻髮感"],
+            ["名詞：低壓力氣囊", "定義：在提供氣道密閉性的同時，維持較低的壁壓，以保護氣管黏膜"],
+            ["概念：解剖性死腔", "定義：呼吸道中不參與氣體交換的空間。氣管造口術可減少此死腔"],
+            ["若氣囊壓力不足，分泌物易從氣囊與氣管壁的縫隙向下滲透，造成什麼風險？", "分泌物進入下呼吸道，恐導致吸入性肺炎"],
+            ["在搬運病人或翻身時，為了防止導尿管被拉扯，應採取何種預防措施？", "注意防止拉扯，必要時給予保護性約束"],
+            ["氣管造口術的適應症：需要 _____ 插管或使用呼吸器輔助呼吸時。", "長時間"],
+            ["氣管造口術的適應症：內科療法無法治療的 _____ 阻塞，如腫瘤、異物、水腫。", "上呼吸道"],
+            ["若氣切套管整個脫出且無法重新置入，除了手持抽痰管維持氣道，應如何給氧？", "由口鼻給予氧氣"],
+            ["導尿管照護中，尿袋應隨時保持在什麼位置，以防止逆流？", "低於膀胱水平位置"],
+            ["執行鼻胃管插入前，護理人員應先戴上何種防護裝備？", "無菌手套"],
+            ["鼻胃管置入時，若患者發生劇烈咳嗽或發紺，應如何處置？", "應立即停止置入並將管路拔出，觀察病人狀況"],
+            ["若發現氣切傷口有發炎或腫脹，這屬於氣切造口的哪一種處理範疇？", "氣管造口照護與傷口評估"],
+            ["執行氣管造口護理的技術目標之一，是能確實執行何種技術？", "氣管造口護理技術"],
+            ["對於清醒的病患，執行鼻胃管插入前最重要的一步是什麼？", "告知、解釋並取得病人同意"],
+            ["導尿管引流系統應維持何種狀態以降低感染風險？", "維持系統的通暢性與密閉性"],
+            ["更換內管時，應一手固定哪個部位，另一手再行操作？", "固定頸板（外管翼狀處）"],
+            ["當病人躁動不安可能扯落導尿管時，必要時應給予什麼處置？", "保護性約束"],
+            ["氣切套管發生脫出意外時，通知醫師的主要目的是什麼？", "評估傷口與重新放置管路之必要性"],
+            ["氣囊充氣時，使用的空針容量通常為多少？", "10cc 空針"],
+            ["氣切套管材質中，哪一種常用於金屬以外的柔軟管路？", "矽膠（Silicone）"],
+            ["氣囊注氣口活塞調節閥若鬆弛，會直接導致氣囊發生什麼狀況？", "漏氣"],
+            ["若氣管造口傷口出血量大，準備縫合包變的同時應注意監測什麼？", "病人生命徵象（Vital signs）"],
+            ["導尿管留置的目的之一，是協助手術期間的哪項監測？", "排空膀胱與監測尿量"]
+        ];
+
+        let index = 0;
+        let stats = {}; 
+        let currentQueue = allData.map((d, i) => ({ q: d[0], a: d[1], origIdx: i }));
+
+        const card = document.getElementById('card');
+        const feedback = document.getElementById('feedback');
+        const badgeFront = document.getElementById('badge-front');
+
+        function updateDisplay() {
+            card.classList.remove('is-flipped');
+            setTimeout(() => {
+                const item = currentQueue[index];
+                document.getElementById('question').textContent = item.q;
+                document.getElementById('answer').textContent = item.a;
+                document.getElementById('counter').textContent = `${index + 1} / ${currentQueue.length}`;
+                document.getElementById('progress-fill').style.width = `${((index + 1) / currentQueue.length) * 100}%`;
+                
+                const vals = Object.values(stats);
+                document.getElementById('learned-stat').textContent = vals.filter(v => v === 'learned').length;
+                document.getElementById('wrong-stat').textContent = vals.filter(v => v === 'wrong').length;
+                document.getElementById('skip-stat').textContent = vals.filter(v => v === 'skipped').length;
+
+                const status = stats[item.origIdx];
+                badgeFront.className = 'badge';
+                if (status === 'learned') {
+                    badgeFront.classList.add('badge-correct', 'show');
+                    badgeFront.innerHTML = 'O';
+                } else if (status === 'wrong') {
+                    badgeFront.classList.add('badge-wrong', 'show');
+                    badgeFront.innerHTML = 'X';
+                } else if (status === 'skipped') {
+                    badgeFront.classList.add('badge-skipped', 'show');
+                    badgeFront.innerHTML = '→';
+                }
+            }, 150);
+        }
+
+        function triggerFeedback(type) {
+            let symbol = '';
+            let colorClass = '';
+            if (type === 'learned') { symbol = 'O'; colorClass = 'text-green-500'; }
+            else if (type === 'wrong') { symbol = 'X'; colorClass = 'text-red-500'; }
+            else { symbol = '→'; colorClass = 'text-gray-400'; }
+
+            feedback.textContent = symbol;
+            feedback.className = `feedback-overlay animate-feedback ${colorClass}`;
+            feedback.addEventListener('animationend', () => {
+                feedback.className = 'feedback-overlay';
+            }, { once: true });
+        }
+
+        function mark(type) {
+            const item = currentQueue[index];
+            stats[item.origIdx] = type;
+            triggerFeedback(type);
+            
+            setTimeout(() => {
+                if (index < currentQueue.length - 1) {
+                    index++;
+                    updateDisplay();
+                } else {
+                    finishSession();
+                }
+            }, 450);
+        }
+
+        function finishSession() {
+            const wrongIdxs = currentQueue.filter(d => stats[d.origIdx] === 'wrong').map(d => d.origIdx);
+            const skipIdxs = currentQueue.filter(d => stats[d.origIdx] === 'skipped').map(d => d.origIdx);
+            const needReview = [...new Set([...wrongIdxs, ...skipIdxs])];
+
+            if (needReview.length > 0) {
+                if (confirm(`本輪結束！\n不熟：${wrongIdxs.length} 題\n跳過：${skipIdxs.length} 題\n\n是否進入「複習模式」針對這些題目加強？`)) {
+                    currentQueue = needReview.map(i => ({ q: allData[i][0], a: allData[i][1], origIdx: i }));
+                    index = 0;
+                    document.getElementById('current-mode').textContent = "複習模式";
+                    document.getElementById('current-mode').classList.replace('text-blue-500', 'text-red-500');
+                    updateDisplay();
+                    return;
+                }
+            } else {
+                alert("太棒了！您已經掌握了本組所有護理技術知識！");
+            }
+            resetAll();
+        }
+
+        function resetAll() {
+            stats = {}; index = 0;
+            currentQueue = allData.map((d, i) => ({ q: d[0], a: d[1], origIdx: i }));
+            document.getElementById('current-mode').textContent = "精進模式";
+            document.getElementById('current-mode').classList.replace('text-red-500', 'text-blue-500');
+            updateDisplay();
+        }
+
+        card.onclick = () => card.classList.toggle('is-flipped');
+        document.getElementById('mark-correct').onclick = () => mark('learned');
+        document.getElementById('mark-wrong').onclick = () => mark('wrong');
+        document.getElementById('mark-skip').onclick = () => mark('skipped');
+        document.getElementById('next').onclick = () => { if (index < currentQueue.length - 1) { index++; updateDisplay(); } };
+        document.getElementById('prev').onclick = () => { if (index > 0) { index--; updateDisplay(); } };
+        document.getElementById('restart').onclick = () => { if(confirm("確定要重置所有進度嗎？")) resetAll(); };
+
+        updateDisplay();
+    </script>
+</body>
+</html>
