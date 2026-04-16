@@ -115,9 +115,10 @@
             </button>
         </div>
         
-        <div class="flex gap-10 items-center text-[10px] font-black text-gray-300 uppercase tracking-widest">
+        <div class="flex gap-4 items-center text-[12px] font-black text-gray-300 uppercase tracking-widest">
             <button id="prev" class="hover:text-black">PREV</button>
-            <button id="restart" class="hover:text-red-500 border-x px-6">RESET</button>
+            <button id="shuffle" class="hover:text-blue-600 border-x px-4">SHUFFLE</button>
+            <button id="restart" class="hover:text-red-500 border-r pr-4">RESET</button>
             <button id="next" class="hover:text-black">NEXT</button>
         </div>
     </div>
@@ -218,6 +219,14 @@
         const card = document.getElementById('card');
         const feedback = document.getElementById('feedback');
         const badgeFront = document.getElementById('badge-front');
+        // 洗牌函數
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
 
         function updateDisplay() {
             card.classList.remove('is-flipped');
@@ -304,7 +313,22 @@
             document.getElementById('current-mode').classList.replace('text-red-500', 'text-blue-500');
             updateDisplay();
         }
-
+// 綁定洗牌按鈕功能
+        document.getElementById('shuffle').onclick = () => {
+            if (confirm("要打亂題目順序並重新開始嗎？")) {
+                stats = {}; 
+                index = 0;
+                // 使用剛剛插入的函數進行洗牌
+                currentQueue = shuffleArray(allData.map((d, i) => ({ q: d[0], a: d[1], origIdx: i })));
+                
+                // 改變模式名稱與顏色
+                const modeTag = document.getElementById('current-mode');
+                modeTag.textContent = "隨機模式";
+                modeTag.className = "text-[10px] font-black text-purple-600 uppercase tracking-widest block mb-1";
+                
+                updateDisplay();
+            }
+        };
         card.onclick = () => card.classList.toggle('is-flipped');
         document.getElementById('mark-correct').onclick = () => mark('learned');
         document.getElementById('mark-wrong').onclick = () => mark('wrong');
